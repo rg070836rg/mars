@@ -271,6 +271,8 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
                             else:
                                 break
 
+            logger.warning(f'WritingToVolume({op.key}) costs {timer.duration} seconds')
+
             ctx[out.key] = filename
 
     @classmethod
