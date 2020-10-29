@@ -22,11 +22,13 @@ import numpy as np
 from .... import opcodes
 from .... import tensor as mt
 from ....context import get_context, RunningMode
+from ....core import Base, Entity
 from ....filesystem import get_fs, LocalFileSystem
 from ....operands import OutputType, OperandStage
 from ....serialize import KeyField, StringField, Int32Field, DictField, BytesField
 from ....tiles import TilesError
-from ....utils import check_chunks_unknown_shape, Timer
+from ....tensor.utils import decide_unify_split
+from ....utils import check_chunks_unknown_shape
 from ...operands import LearnOperand, LearnOperandMixin
 from ..core import proxima, get_proxima_type, validate_tensor, available_numpy_dtypes
 
@@ -145,6 +147,7 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
     @classmethod
     def tile(cls, op):
         tensor = op.tensor
+        pk = op.pk
         out = op.outputs[0]
         index_path = op.index_path
         ctx = get_context()
@@ -267,9 +270,6 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
                                 out_f.write(data)
                             else:
                                 break
-
-            logger.warning(f'WritingToVolume({op.key}) size {os.path.getsize(path)}, '
-                           f'costs {timer.duration} seconds')
 
             ctx[out.key] = filename
 
