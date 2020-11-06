@@ -227,7 +227,7 @@ class Test(unittest.TestCase):
             df = md.DataFrame(pd.DataFrame(doc), chunk_size=(doc_chunk, dimension))
             q = mt.tensor(query, chunk_size=(query_chunk, dimension))
 
-            index = build_index(df, df.index, index_path=f)
+            index = build_index(df, index_path=f)
 
             self.assertGreater(len(os.listdir(f)), 0)
 
