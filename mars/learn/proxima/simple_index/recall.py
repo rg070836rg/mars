@@ -107,7 +107,7 @@ def recall(doc, query, topk, sample_count, pk_p, distance_p,
 
     query_sample, idx = sample_data(query, sample_count)
     pk_p_sample, distance_p_sample = pk_p[idx, :], distance_p[idx, :]
-    pk_l, distance_l = linear_build_and_search(doc, query_sample, topk)
+    pk_l, distance_l = linear_build_and_search(doc, mt.tensor(doc.index, dtype=np.uint64), query_sample, topk)
 
     r = mr.spawn(compute_recall, args=(pk_l, distance_l, pk_p_sample,
                                        distance_p_sample, topk_ids, method))
