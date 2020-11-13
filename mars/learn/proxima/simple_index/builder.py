@@ -21,7 +21,7 @@ import numpy as np
 from .... import opcodes
 from .... import tensor as mt
 from ....context import get_context, RunningMode
-from ....filesystem import get_fs, LocalFileSyste
+from ....filesystem import get_fs, LocalFileSystem
 from ....operands import OutputType, OperandStage
 from ....serialize import KeyField, StringField, Int32Field, DictField, BytesField
 from ....tiles import TilesError
