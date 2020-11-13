@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-import os
 import pickle  # nosec  # pylint: disable=import_pickle
 import tempfile
 
@@ -22,13 +21,11 @@ import numpy as np
 from .... import opcodes
 from .... import tensor as mt
 from ....context import get_context, RunningMode
-from ....core import Base, Entity
-from ....filesystem import get_fs, LocalFileSystem
+from ....filesystem import get_fs, LocalFileSyste
 from ....operands import OutputType, OperandStage
 from ....serialize import KeyField, StringField, Int32Field, DictField, BytesField
 from ....tiles import TilesError
-from ....tensor.utils import decide_unify_split
-from ....utils import check_chunks_unknown_shape
+from ....utils import check_chunks_unknown_shape, Timer
 from ...operands import LearnOperand, LearnOperandMixin
 from ..core import proxima, get_proxima_type, validate_tensor, available_numpy_dtypes
 
