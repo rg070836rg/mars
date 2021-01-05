@@ -26,7 +26,7 @@ from ....context import get_context, RunningMode
 from ....filesystem import get_fs, LocalFileSystem
 from ....operands import OutputType, OperandStage
 from ....serialize import KeyField, StringField, Int32Field, Int64Field, \
-    DictField, BytesField, BoolField, ListField, DataTypeField, SliceField
+    DictField, BytesField, BoolField, TupleField, DataTypeField, SliceField
 from ....tensor.indexing import TensorSlice
 from ....tiles import TilesError
 from ....utils import check_chunks_unknown_shape, Timer
@@ -43,7 +43,7 @@ class ProximaBuildMmap(LearnOperand, LearnOperandMixin):
     _op_type_ = opcodes.PROXIMA_BUILD_MMAP
 
     _create_mmap_file = BoolField('create_mmap_file')
-    _array_shape = ListField('array_shape')
+    _array_shape = TupleField('array_shape')
     _array_dtype = DataTypeField('array_dtype')
     _offset = Int64Field('offset')
     _partition_slice = SliceField('partition_slice')
@@ -109,14 +109,21 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
                                   on_serialize=pickle.dumps,
                                   on_deserialize=pickle.loads)
 
+    # only for chunk
+    _array_shape = TupleField('array_shape')
+    _array_dtype = DataTypeField('array_dtype')
+    _offset = Int64Field('offset')
+
     def __init__(self, distance_metric=None, index_path=None,
                  dimension=None, column_number=None,
                  index_builder=None, index_builder_params=None,
                  index_converter=None, index_converter_params=None,
+                 array_shape=None, array_dtype=None, offset=None,
                  topk=None, storage_options=None, output_types=None, stage=None, **kw):
         super().__init__(_distance_metric=distance_metric, _index_path=index_path,
                          _dimension=dimension, _column_number=column_number, _index_builder=index_builder,
                          _index_builder_params=index_builder_params,
+                         _array_shape=array_shape, _array_dtype=array_dtype, _offset=offset,
                          _index_converter=index_converter, _index_converter_params=index_converter_params,
                          _topk=topk, _storage_options=storage_options,
                          _output_types=output_types, _stage=stage, **kw)
@@ -162,6 +169,18 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
     @property
     def storage_options(self):
         return self._storage_options
+
+    @property
+    def array_shape(self):
+        return self._array_shape
+
+    @property
+    def array_dtype(self):
+        return self._array_dtype
+
+    @property
+    def offset(self):
+        return self._offset
 
     def __call__(self, tensor):
         return self.new_tileable([tensor])
@@ -263,7 +282,7 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
         if len(cur_chunks) > 0:
             index_chunk_inputs.append(cur_chunks)
 
-        workers = ctx.get_worker_addresses()
+        workers = ctx.get_worker_addresses() or [None]
         worker_iter = iter(itertools.cycle(workers))
         out_chunks = []
         offset = 0
@@ -297,33 +316,35 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
             offset += nrows
             out_chunks.append(write_mmap_chunks)
 
-        out_chunks = []
+        final_out_chunks = []
         for j, chunks in enumerate(out_chunks):
             chunk_op = op.copy().reset_key()
             chunk_op._stage = OperandStage.map
             chunk_op._expect_worker = chunks[0].op.expect_worker
+            chunk_op._array_shape = chunks[0].op.array_shape
+            chunk_op._array_dtype = chunks[0].op.array_dtype
+            chunk_op._offset = chunks[0].op.offset
             out_chunk = chunk_op.new_chunk(chunks, index=(j,))
-            out_chunks.append(out_chunk)
+            final_out_chunks.append(out_chunk)
 
-        logger.warning(f"index chunks count: {len(out_chunks)} ")
+        logger.warning(f"index chunks count: {len(final_out_chunks)} ")
 
         params = out.params
-        params['chunks'] = out_chunks
-        params['nsplits'] = ((1,) * len(out_chunks),)
+        params['chunks'] = final_out_chunks
+        params['nsplits'] = ((1,) * len(final_out_chunks),)
         new_op = op.copy()
         return new_op.new_tileables(op.inputs, kws=[params])
 
     @classmethod
     def _execute_map(cls, ctx, op: "ProximaBuilder"):
-        inp = op.inputs[0]
-        path = ctx[inp.key]
+        path = ctx[op.inputs[0].key]
         out = op.outputs[0]
 
-        data = np.memmap(path, dtype=inp.op.array_dtype, mode='r',
-                         shape=inp.op.array_shape)
+        data = np.memmap(path, dtype=op.array_dtype, mode='r',
+                         shape=op.array_shape)
 
-        proxima_type = get_proxima_type(inp.dtype)
-        offset = inp.op.offset
+        proxima_type = get_proxima_type(op.array_dtype)
+        offset = op.offset
 
         # holder
         with Timer() as timer:
@@ -432,7 +453,7 @@ def build_index(tensor, dimension=None, index_path=None, column_number=None,
     if need_shuffle:
         tensor = mt.random.permutation(tensor)
 
-    op = ProximaBuilder(tensor=tensor, distance_metric=distance_metric,
+    op = ProximaBuilder(distance_metric=distance_metric,
                         index_path=index_path, dimension=dimension,
                         column_number=column_number,
                         index_builder=index_builder,
