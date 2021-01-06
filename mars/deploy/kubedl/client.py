@@ -158,6 +158,7 @@ class KubeDLCluster:
 
     def _wait_service_ready(self):
         self._mars_endpoint = f'{self._slb_endpoint}/mars/{self._namespace}/{self._job_name}-webservice-0'
+        print(f'Web endpoint started at http://{self._mars_endpoint}')
         check_start_time = time.time()
         worker_count_url = self._mars_endpoint + '/api/worker?action=count'
         while True:
@@ -238,3 +239,12 @@ def new_cluster(kube_api_client=None, image=None, scheduler_num=1, scheduler_cpu
     client = KubeDLClusterClient(cluster)
     client.start()
     return client
+
+
+def stop_cluster(kube_api_client=None, namespace='mars', job_name=None):
+    from kubernetes import client as kube_client
+
+    custom_api = kube_client.CustomObjectsApi(kube_api_client)
+    api, version = KUBEDL_API_VERSION.rsplit('/', 1)
+    custom_api.delete_namespaced_custom_object(
+        api, version, namespace, KUBEDL_MARS_PLURAL, job_name)
