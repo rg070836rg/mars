@@ -25,7 +25,7 @@ from .... import tensor as mt
 from ....context import get_context, RunningMode
 from ....filesystem import get_fs, LocalFileSystem
 from ....operands import OutputType, OperandStage
-from ....serialize import KeyField, StringField, Int32Field, Int64Field, \
+from ....serialize import StringField, Int32Field, Int64Field, \
     DictField, BytesField, BoolField, TupleField, DataTypeField, SliceField
 from ....tensor.indexing import TensorSlice
 from ....tiles import TilesError
@@ -350,7 +350,7 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
         with Timer() as timer:
             holder = proxima.IndexHolder(type=proxima_type,
                                          dimension=op.dimension, shallow=True)
-            holder.mount(data)
+            holder.mount(data, key_base=offset)
 
         logger.warning(f'Holder({op.key}) costs {timer.duration} seconds')
 
