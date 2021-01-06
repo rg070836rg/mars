@@ -158,7 +158,7 @@ class KubeDLCluster:
 
     def _wait_service_ready(self):
         self._mars_endpoint = f'{self._slb_endpoint}/mars/{self._namespace}/{self._job_name}-webservice-0'
-        print(f'Web endpoint started at http://{self._mars_endpoint}')
+        print(f'Web endpoint started at {self._mars_endpoint}')
         check_start_time = time.time()
         worker_count_url = self._mars_endpoint + '/api/worker?action=count'
         while True:

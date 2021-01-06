@@ -286,7 +286,7 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
         worker_iter = iter(itertools.cycle(workers))
         out_chunks = []
         offset = 0
-        for i, chunks in enumerate(index_chunk_inputs):
+        for chunks in index_chunk_inputs:
             write_mmap_chunks = []
             worker = next(worker_iter)
             nrows = sum(c.shape[0] for c in chunks)
