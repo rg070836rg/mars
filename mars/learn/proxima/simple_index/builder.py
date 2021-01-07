@@ -337,10 +337,10 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
 
     @classmethod
     def _execute_map(cls, ctx, op: "ProximaBuilder"):
-        path = ctx[op.inputs[0].key]
+        mmap_path = ctx[op.inputs[0].key]
         out = op.outputs[0]
 
-        data = np.memmap(path, dtype=op.array_dtype, mode='r',
+        data = np.memmap(mmap_path, dtype=op.array_dtype, mode='r',
                          shape=op.array_shape)
 
         proxima_type = get_proxima_type(op.array_dtype)
@@ -375,6 +375,9 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
             builder = builder.train_and_build(holder)
 
         logger.warning(f'Builder({op.key}) costs {timer.duration} seconds')
+
+        # remove mmap file
+        os.remove(mmap_path)
 
         # dumper
         with Timer() as timer:
