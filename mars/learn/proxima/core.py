@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import itertools
 import tempfile
 
 import numpy as np
@@ -24,7 +23,8 @@ except ImportError:  # pragma: no cover
 from ... import opcodes
 from ... import tensor as mt
 from ...operands import OutputType
-from ...serialize import BoolField, TupleField, DataTypeField, Int64Field, SliceField
+from ...serialize import BoolField, TupleField, DataTypeField, Int64Field, \
+    SliceField, StringField
 from ...tensor.indexing import TensorSlice
 from ..operands import LearnOperand, LearnOperandMixin
 
@@ -52,6 +52,7 @@ if proxima:
 class ProximaArrayMmap(LearnOperand, LearnOperandMixin):
     _op_type_ = opcodes.PROXIMA_ARRAY_MMAP
 
+    _prefix = StringField('prefix')
     _create_mmap_file = BoolField('create_mmap_file')
     _array_shape = TupleField('array_shape')
     _array_dtype = DataTypeField('array_dtype')
@@ -59,11 +60,11 @@ class ProximaArrayMmap(LearnOperand, LearnOperandMixin):
     _partition_slice = SliceField('partition_slice')
 
     def __init__(self, create_mmap_file=None, array_shape=None, array_dtype=None,
-                 offset=None, partition_slice=None, output_types=None, **kw):
+                 prefix=None, offset=None, partition_slice=None, output_types=None, **kw):
         super().__init__(_create_mmap_file=create_mmap_file,
                          _array_shape=array_shape,
                          _array_dtype=array_dtype,
-                         _offset=offset,
+                         _prefix=prefix, _offset=offset,
                          _partition_slice=partition_slice,
                          _output_types=output_types, **kw)
         if self._output_types is None:
@@ -82,6 +83,10 @@ class ProximaArrayMmap(LearnOperand, LearnOperandMixin):
         return self._array_dtype
 
     @property
+    def prefix(self):
+        return self._prefix
+
+    @property
     def offset(self):
         return self._offset
 
@@ -92,7 +97,7 @@ class ProximaArrayMmap(LearnOperand, LearnOperandMixin):
     @classmethod
     def execute(cls, ctx, op):
         if op.create_mmap_file:
-            path = tempfile.mkstemp(prefix='proxima-build-mmap-', suffix='.dat')[1]
+            path = tempfile.mkstemp(prefix=op.prefix, suffix='.dat')[1]
             np.memmap(path, dtype=op.array_dtype, mode='w+', shape=op.array_shape)
             ctx[op.outputs[0].key] = path
         else:
@@ -134,7 +139,7 @@ def rechunk_tensor(tensor, chunk_size):
     return chunk_groups
 
 
-def build_mmap_chunks(chunks, worker, offset=0):
+def build_mmap_chunks(chunks, worker, file_prefix, offset=0):
     write_mmap_chunks = []
     nrows = sum(c.shape[0] for c in chunks)
     array_shape = (nrows, chunks[0].shape[1])
@@ -142,6 +147,7 @@ def build_mmap_chunks(chunks, worker, offset=0):
     create_mmap_op = ProximaArrayMmap(create_mmap_file=True,
                                       array_shape=array_shape,
                                       array_dtype=array_dtype,
+                                      prefix=file_prefix,
                                       offset=offset)
     create_mmap_op._expect_worker = worker
     create_mmap_chunk = create_mmap_op.new_chunk(

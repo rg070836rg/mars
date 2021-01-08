@@ -17,6 +17,7 @@ import logging
 import os
 import pickle  # nosec  # pylint: disable=import_pickle
 import random
+import uuid
 from hashlib import md5
 from collections import defaultdict
 
@@ -245,7 +246,9 @@ class ProximaSearcher(LearnOperand, LearnOperandMixin):
                     query_chunks = tensor_chunks
                 else:
                     chunk_op._expect_worker = chunk_index.op.expect_worker
-                    query_chunks = build_mmap_chunks(tensor_chunks, chunk_op._expect_worker)
+                    file_prefix = f'proxima-query-{str(uuid.uuid4())}'
+                    query_chunks = build_mmap_chunks(tensor_chunks, chunk_op._expect_worker,
+                                                     file_prefix=file_prefix)
                 chunk_op._query_shape = query_chunks[0].op.array_shape
                 chunk_op._query_dtype = query_chunks[0].op.array_dtype
 

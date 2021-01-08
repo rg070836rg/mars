@@ -17,6 +17,7 @@ import logging
 import os
 import pickle  # nosec  # pylint: disable=import_pickle
 import tempfile
+import uuid
 
 import numpy as np
 
@@ -205,7 +206,9 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
         out_chunks = []
         offset = 0
         for chunk_group in chunk_groups:
-            out_chunks.append(build_mmap_chunks(chunk_group, next(worker_iter), offset=offset))
+            file_prefix = f'proxima-build-{str(uuid.uuid4())}'
+            out_chunks.append(build_mmap_chunks(chunk_group, next(worker_iter),
+                                                offset=offset, file_prefix=file_prefix))
             offset += sum(c.shape[0] for c in chunk_group)
 
         final_out_chunks = []
