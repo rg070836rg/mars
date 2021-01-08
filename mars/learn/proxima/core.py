@@ -12,13 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import itertools
+import tempfile
+
 import numpy as np
 try:
     import pyproxima2 as proxima
 except ImportError:  # pragma: no cover
     proxima = None
 
+from ... import opcodes
 from ... import tensor as mt
+from ...operands import OutputType
+from ...serialize import BoolField, TupleField, DataTypeField, Int64Field, SliceField
+from ...tensor.indexing import TensorSlice
+from ..operands import LearnOperand, LearnOperandMixin
 
 
 available_numpy_dtypes = [
@@ -39,6 +47,120 @@ if proxima:
     _type_mapping = {numpy_dtype: proxima_type
                      for numpy_dtype, proxima_type
                      in zip(available_numpy_dtypes, _proxima_types)}
+
+
+class ProximaArrayMmap(LearnOperand, LearnOperandMixin):
+    _op_type_ = opcodes.PROXIMA_ARRAY_MMAP
+
+    _create_mmap_file = BoolField('create_mmap_file')
+    _array_shape = TupleField('array_shape')
+    _array_dtype = DataTypeField('array_dtype')
+    _offset = Int64Field('offset')
+    _partition_slice = SliceField('partition_slice')
+
+    def __init__(self, create_mmap_file=None, array_shape=None, array_dtype=None,
+                 offset=None, partition_slice=None, output_types=None, **kw):
+        super().__init__(_create_mmap_file=create_mmap_file,
+                         _array_shape=array_shape,
+                         _array_dtype=array_dtype,
+                         _offset=offset,
+                         _partition_slice=partition_slice,
+                         _output_types=output_types, **kw)
+        if self._output_types is None:
+            self._output_types = [OutputType.object]
+
+    @property
+    def create_mmap_file(self):
+        return self._create_mmap_file
+
+    @property
+    def array_shape(self):
+        return self._array_shape
+
+    @property
+    def array_dtype(self):
+        return self._array_dtype
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @property
+    def partition_slice(self):
+        return self._partition_slice
+
+    @classmethod
+    def execute(cls, ctx, op):
+        if op.create_mmap_file:
+            path = tempfile.mkstemp(prefix='proxima-build-mmap-', suffix='.dat')[1]
+            np.memmap(path, dtype=op.array_dtype, mode='w+', shape=op.array_shape)
+            ctx[op.outputs[0].key] = path
+        else:
+            path = ctx[op.inputs[0].key]
+            array = ctx[op.inputs[1].key]
+            fp = np.memmap(path, dtype=op.array_dtype, mode='r+', shape=op.array_shape)
+            fp[op.partition_slice] = array
+            ctx[op.outputs[0].key] = path
+
+
+def rechunk_tensor(tensor, chunk_size):
+    chunk_groups = []
+    cur_row_number = 0
+    cur_chunks = []
+    for c in tensor.chunks:
+        chunk_nrow = c.shape[0]
+        if cur_row_number + chunk_nrow <= chunk_size:
+            cur_chunks.append(c)
+            cur_row_number += chunk_nrow
+        else:
+            pos = chunk_size - cur_row_number
+            slice_op = TensorSlice((slice(None, pos), slice(None)), dtype=c.dtype)
+            cur_chunks.append(slice_op.new_chunk([c], shape=(pos, c.shape[1]),
+                                                 index=(len(cur_chunks), 0),
+                                                 order=c.order))
+            chunk_groups.append(cur_chunks)
+            cur_chunks = []
+            cur_row_number = 0
+
+            slice_op_rest = TensorSlice((slice(pos, None), slice(None)), dtype=c.dtype)
+            rest_chunk = slice_op_rest.new_chunk([c], shape=(chunk_nrow - pos, c.shape[1]),
+                                                 index=(len(cur_chunks), 0),
+                                                 order=c.order)
+            cur_chunks.append(rest_chunk)
+            cur_row_number += chunk_nrow - pos
+
+    if len(cur_chunks) > 0:
+        chunk_groups.append(cur_chunks)
+    return chunk_groups
+
+
+def build_mmap_chunks(chunks, worker, offset=0):
+    write_mmap_chunks = []
+    nrows = sum(c.shape[0] for c in chunks)
+    array_shape = (nrows, chunks[0].shape[1])
+    array_dtype = chunks[0].dtype
+    create_mmap_op = ProximaArrayMmap(create_mmap_file=True,
+                                      array_shape=array_shape,
+                                      array_dtype=array_dtype,
+                                      offset=offset)
+    create_mmap_op._expect_worker = worker
+    create_mmap_chunk = create_mmap_op.new_chunk(
+        None, index=(0,), shape=(), dtype=array_dtype)
+    start_index = 0
+    for j, chk in enumerate(chunks):
+        s = slice(start_index, start_index + chk.shape[0])
+        start_index += chk.shape[0]
+        write_mmap_op = ProximaArrayMmap(create_mmap_file=False,
+                                         array_shape=array_shape,
+                                         array_dtype=array_dtype,
+                                         offset=offset,
+                                         partition_slice=s)
+        write_mmap_op._expect_worker = worker
+        write_mmap_chunk = write_mmap_op.new_chunk([create_mmap_chunk, chk],
+                                                   index=(j, 0), shape=(),
+                                                   dtype=array_dtype)
+        write_mmap_chunks.append(write_mmap_chunk)
+    return write_mmap_chunks
 
 
 def validate_tensor(tensor):

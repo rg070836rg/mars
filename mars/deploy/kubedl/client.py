@@ -241,7 +241,7 @@ def new_cluster(kube_api_client=None, image=None, scheduler_num=1, scheduler_cpu
     return client
 
 
-def stop_cluster(kube_api_client=None, namespace='mars', job_name=None):
+def stop_cluster(kube_api_client=None, namespace='default', job_name=None):
     from kubernetes import client as kube_client
 
     custom_api = kube_client.CustomObjectsApi(kube_api_client)
