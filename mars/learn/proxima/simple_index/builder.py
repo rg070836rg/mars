@@ -36,7 +36,6 @@ from ..core import proxima, get_proxima_type, validate_tensor, \
 
 logger = logging.getLogger(__name__)
 
-
 DEFAULT_INDEX_SIZE = 5 * 10 ** 6
 
 
@@ -235,8 +234,7 @@ class ProximaBuilder(LearnOperand, LearnOperandMixin):
         mmap_path = ctx[op.inputs[0].key]
         out = op.outputs[0]
 
-        data = np.memmap(mmap_path, dtype=op.array_dtype, mode='r',
-                         shape=op.array_shape)
+        data = np.load(mmap_path)
 
         proxima_type = get_proxima_type(op.array_dtype)
         offset = op.offset

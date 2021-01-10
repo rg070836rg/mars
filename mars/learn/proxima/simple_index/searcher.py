@@ -246,9 +246,9 @@ class ProximaSearcher(LearnOperand, LearnOperandMixin):
                     query_chunks = tensor_chunks
                 else:
                     chunk_op._expect_worker = chunk_index.op.expect_worker
-                    file_prefix = f'proxima-query-{str(uuid.uuid4())}'
-                    query_chunks = build_mmap_chunks(tensor_chunks, chunk_op._expect_worker,
-                                                     file_prefix=file_prefix)
+                file_prefix = f'proxima-query-{str(uuid.uuid4())}'
+                query_chunks = build_mmap_chunks(tensor_chunks, chunk_op._expect_worker,
+                                                 file_prefix=file_prefix)
                 chunk_op._query_shape = query_chunks[0].op.array_shape
                 chunk_op._query_dtype = query_chunks[0].op.array_dtype
 
@@ -362,8 +362,8 @@ class ProximaSearcher(LearnOperand, LearnOperandMixin):
             return
 
         query_mmap_path = ctx[op.inputs[0].key]
-        inp = np.memmap(query_mmap_path, dtype=op.query_dtype, mode='r', shape=op.query_shape)
-
+        # inp = np.memmap(query_mmap_path, dtype=op.query_dtype, mode='r', shape=op.query_shape)
+        inp = np.load(query_mmap_path)
         check_expect_worker = True
         index_path = ctx[op.inputs[-1].key]
 

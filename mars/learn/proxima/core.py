@@ -15,6 +15,7 @@
 import tempfile
 
 import numpy as np
+
 try:
     import pyproxima2 as proxima
 except ImportError:  # pragma: no cover
@@ -27,7 +28,6 @@ from ...serialize import BoolField, TupleField, DataTypeField, Int64Field, \
     SliceField, StringField
 from ...tensor.indexing import TensorSlice
 from ..operands import LearnOperand, LearnOperandMixin
-
 
 available_numpy_dtypes = [
     np.dtype(np.float16),
@@ -98,12 +98,15 @@ class ProximaArrayMmap(LearnOperand, LearnOperandMixin):
     def execute(cls, ctx, op):
         if op.create_mmap_file:
             path = tempfile.mkstemp(prefix=op.prefix, suffix='.dat')[1]
-            np.memmap(path, dtype=op.array_dtype, mode='w+', shape=op.array_shape)
+            fp = np.memmap(path, dtype=op.array_dtype, mode='w+', shape=op.array_shape, offset=128)
+            header = np.lib.format.header_data_from_array_1_0(fp)
+            with open(path, 'r+b') as f:
+                np.lib.format.write_array_header_1_0(f, header)
             ctx[op.outputs[0].key] = path
         else:
             path = ctx[op.inputs[0].key]
             array = ctx[op.inputs[1].key]
-            fp = np.memmap(path, dtype=op.array_dtype, mode='r+', shape=op.array_shape)
+            fp = np.memmap(path, dtype=op.array_dtype, mode='r+', shape=op.array_shape, offset=128)
             fp[op.partition_slice] = array
             ctx[op.outputs[0].key] = path
 
